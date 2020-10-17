@@ -15,7 +15,6 @@ library:
   - casing
   - containers
   - dirforest
-  - mtl
   - optparse-applicative
   - path
   - path-io

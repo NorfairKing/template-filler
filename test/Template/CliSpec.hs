@@ -30,11 +30,11 @@ spec = do
             DF.write sourceDir input (\p sb -> SB.writeFile (fromAbsFile p) sb)
             fill
               Settings
-                { settingSourceDir = sourceDir,
-                  settingDestinationDir = destinationDir,
+                { settingFromTo = FromToDir sourceDir destinationDir,
                   settingBackupDir = backupDir,
                   settingFind = "Foo",
-                  settingReplace = "Bar"
+                  settingReplace = "Bar",
+                  settingOverwrite = True
                 }
             actual <- DF.read destinationDir (\p -> SB.readFile (fromAbsFile p))
             actual `shouldBe` expected
@@ -49,11 +49,11 @@ spec = do
             DF.write sourceDir input (\p sb -> SB.writeFile (fromAbsFile p) sb)
             fill
               Settings
-                { settingSourceDir = sourceDir,
-                  settingDestinationDir = destinationDir,
+                { settingFromTo = FromToDir sourceDir destinationDir,
                   settingBackupDir = backupDir,
                   settingFind = "Foo",
-                  settingReplace = "Bar"
+                  settingReplace = "Bar",
+                  settingOverwrite = True
                 }
             actual <- DF.read destinationDir (\p -> SB.readFile (fromAbsFile p))
             actual `shouldBe` expected

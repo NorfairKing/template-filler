@@ -4,6 +4,7 @@
 
 module Template.Cli where
 
+import Control.Monad
 import qualified Data.ByteString as SB
 import Data.ByteString (ByteString)
 import qualified Data.DirForest as DF
@@ -27,7 +28,20 @@ templateCli :: IO ()
 templateCli = getSettings >>= fill
 
 fill :: Settings -> IO ()
-fill fs@Settings {..} = fillDir settingSourceDir settingDestinationDir settingBackupDir settingFind settingReplace
+fill fs@Settings {..} =
+  ( case settingFromTo of
+      FromToFile source destination -> fillFile source destination
+      FromToDir source destination -> fillDir source destination
+  )
+    settingBackupDir
+    settingFind
+    settingReplace
+
+fillFile :: Path Abs File -> Path Abs File -> Path Abs Dir -> Text -> Text -> IO ()
+fillFile source destination backup findText replaceText = do
+  mbs <- forgivingAbsence $ SB.readFile $ fromAbsFile source
+  let mbs' = fillByteString findText replaceText <$> mbs
+  forM_ mbs' $ \bs' -> SB.writeFile (fromAbsFile destination) bs'
 
 fillDir :: Path Abs Dir -> Path Abs Dir -> Path Abs Dir -> Text -> Text -> IO ()
 fillDir source destination backup findText replaceText = do

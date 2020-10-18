@@ -8,6 +8,7 @@ module Template.Cli.OptParse
   ( -- * Interface
     getSettings,
     Settings (..),
+    FromTo (..),
 
     -- ** Exposed for testing
     combineToSettings,
@@ -24,33 +25,62 @@ import GHC.Generics (Generic)
 import Options.Applicative as OptParse
 import Path
 import Path.IO
+import System.Directory as FP
+import System.Exit
 
 getSettings :: IO Settings
 getSettings = getFlags >>= combineToSettings
 
 data Settings
   = Settings
-      { settingSourceDir :: !(Path Abs Dir),
-        settingDestinationDir :: !(Path Abs Dir),
+      { settingFromTo :: !FromTo,
         settingBackupDir :: !(Path Abs Dir),
         settingFind :: !Text,
         settingReplace :: !Text
       }
   deriving (Show, Eq, Generic)
 
+data FromTo
+  = FromToDir (Path Abs Dir) (Path Abs Dir)
+  | FromToFile (Path Abs File) (Path Abs File)
+  deriving (Show, Eq, Generic)
+
 combineToSettings :: Flags -> IO Settings
 combineToSettings Flags {..} = do
-  settingSourceDir <- resolveDir' $ fromMaybe "." flagSourceDir
-  settingDestinationDir <- resolveDir' $ fromMaybe "." flagDestinationDir
   settingBackupDir <- case flagBackupDir of
     Nothing -> do
       dataDir <- getXdgDir XdgData (Just [reldir|template|])
       now <- getCurrentTime
       resolveDir dataDir $ formatTime defaultTimeLocale "%F %T" now
     Just bd -> resolveDir' bd
+  let sourceFP = fromMaybe "." flagSource
+  let destinationFP = fromMaybe "." flagDestination
+  source <- resolveFileOrDir sourceFP
+  destination <- resolveFileOrDir destinationFP
+  settingFromTo <- case (source, destination) of
+    (NonExistent sfp, _) -> die $ "The source does not exist: " <> sfp
+    (IsFile sf, IsFile df) -> pure $ FromToFile sf df
+    (IsDir sd, IsDir dd) -> pure $ FromToDir sd dd
+    (IsFile sf, IsDir dd) -> pure $ FromToFile sf (dd </> filename sf)
+    (IsDir _, IsFile df) -> die $ "The source is a directory but the destination is a file: " <> fromAbsFile df
+    (IsFile sf, NonExistent dfp) -> FromToFile sf <$> resolveFile' dfp
+    (IsDir sd, NonExistent dfp) -> FromToDir sd <$> resolveDir' dfp
   let settingFind = flagFind
   let settingReplace = flagReplace
   pure Settings {..}
+
+data FileOrDir = IsFile (Path Abs File) | IsDir (Path Abs Dir) | NonExistent FilePath
+
+resolveFileOrDir :: FilePath -> IO FileOrDir
+resolveFileOrDir fp = do
+  dirExists <- FP.doesDirectoryExist fp
+  if dirExists
+    then IsDir <$> resolveDir' fp
+    else do
+      fileExists <- FP.doesFileExist fp
+      if fileExists
+        then IsFile <$> resolveFile' fp
+        else pure $ NonExistent fp
 
 getFlags :: IO Flags
 getFlags = customExecParser prefs_ parseFlags
@@ -64,8 +94,8 @@ prefs_ =
 
 data Flags
   = Flags
-      { flagSourceDir :: !(Maybe FilePath),
-        flagDestinationDir :: !(Maybe FilePath),
+      { flagSource :: !(Maybe FilePath),
+        flagDestination :: !(Maybe FilePath),
         flagBackupDir :: !(Maybe FilePath),
         flagFind :: !Text,
         flagReplace :: !Text
@@ -81,8 +111,8 @@ parseFlags = OptParse.info parser modifier
           <$> optional
             ( strOption
                 ( mconcat
-                    [ long "source-dir",
-                      help "The directory to read from",
+                    [ long "source",
+                      help "The file or directory to read from",
                       metavar "DIRECTORY"
                     ]
                 )
@@ -90,8 +120,8 @@ parseFlags = OptParse.info parser modifier
           <*> optional
             ( strOption
                 ( mconcat
-                    [ long "destination-dir",
-                      help "The directory to write to",
+                    [ long "destination",
+                      help "The file or directory to write to",
                       metavar "DIRECTORY"
                     ]
                 )

@@ -27,14 +27,17 @@ templateCli :: IO ()
 templateCli = getSettings >>= fill
 
 fill :: Settings -> IO ()
-fill fs@Settings {..} = do
-  df <- DF.read settingSourceDir (\p -> SB.readFile $ fromAbsFile p)
-  case DF.fromMap $ fillMap settingFind settingReplace $ DF.toMap df of
+fill fs@Settings {..} = fillDir settingSourceDir settingDestinationDir settingBackupDir settingFind settingReplace
+
+fillDir :: Path Abs Dir -> Path Abs Dir -> Path Abs Dir -> Text -> Text -> IO ()
+fillDir source destination backup findText replaceText = do
+  df <- DF.read source (\p -> SB.readFile $ fromAbsFile p)
+  case DF.fromMap $ fillMap findText replaceText $ DF.toMap df of
     Left err -> die $ "Failed to replace path: " <> show err
     Right pathsReplacedDF -> do
-      let df' = fillDirforest settingFind settingReplace pathsReplacedDF
-      DF.write settingBackupDir df (\p t -> SB.writeFile (fromAbsFile p) t)
-      DF.write settingDestinationDir df' (\p t -> SB.writeFile (fromAbsFile p) t)
+      let df' = fillDirforest findText replaceText pathsReplacedDF
+      DF.write backup df (\p t -> SB.writeFile (fromAbsFile p) t)
+      DF.write destination df' (\p t -> SB.writeFile (fromAbsFile p) t)
 
 fillMap :: Text -> Text -> Map FilePath a -> Map FilePath a
 fillMap findText replaceText = M.mapKeys (T.unpack . fillText findText replaceText . T.pack)

@@ -20,6 +20,7 @@ library:
   - path-io
   - pretty-show
   - text
+  - time
   - yaml
 
 executables:
@@ -45,5 +46,9 @@ tests:
     dependencies:
     - hspec
     - optparse-applicative
+    - path
+    - path-io
     - template-filler
     - yaml
+    - bytestring
+    - dirforest

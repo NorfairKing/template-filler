@@ -19,6 +19,7 @@ where
 import Control.Applicative
 import Data.Maybe
 import Data.Text (Text)
+import Data.Time
 import GHC.Generics (Generic)
 import Options.Applicative as OptParse
 import Path
@@ -31,6 +32,7 @@ data Settings
   = Settings
       { settingSourceDir :: !(Path Abs Dir),
         settingDestinationDir :: !(Path Abs Dir),
+        settingBackupDir :: !(Path Abs Dir),
         settingFind :: !Text,
         settingReplace :: !Text
       }
@@ -40,6 +42,12 @@ combineToSettings :: Flags -> IO Settings
 combineToSettings Flags {..} = do
   settingSourceDir <- resolveDir' $ fromMaybe "." flagSourceDir
   settingDestinationDir <- resolveDir' $ fromMaybe "." flagDestinationDir
+  settingBackupDir <- case flagBackupDir of
+    Nothing -> do
+      dataDir <- getXdgDir XdgData (Just [reldir|template|])
+      now <- getCurrentTime
+      resolveDir dataDir $ formatTime defaultTimeLocale "%F %T" now
+    Just bd -> resolveDir' bd
   let settingFind = flagFind
   let settingReplace = flagReplace
   pure Settings {..}
@@ -58,6 +66,7 @@ data Flags
   = Flags
       { flagSourceDir :: !(Maybe FilePath),
         flagDestinationDir :: !(Maybe FilePath),
+        flagBackupDir :: !(Maybe FilePath),
         flagFind :: !Text,
         flagReplace :: !Text
       }
@@ -83,6 +92,15 @@ parseFlags = OptParse.info parser modifier
                 ( mconcat
                     [ long "destination-dir",
                       help "The directory to write to",
+                      metavar "DIRECTORY"
+                    ]
+                )
+            )
+          <*> optional
+            ( strOption
+                ( mconcat
+                    [ long "backup-dir",
+                      help "The directory to write a backup to",
                       metavar "DIRECTORY"
                     ]
                 )

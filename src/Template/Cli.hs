@@ -2,10 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Template.Cli
-  ( templateCli,
-  )
-where
+module Template.Cli where
 
 import qualified Data.DirForest as DF
 import Data.DirForest (DirForest (..))
@@ -15,7 +12,9 @@ import Data.Monoid
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified Data.Text.IO as T
+import Data.Time
 import Path
+import Path.IO
 import System.Exit
 import Template.Cli.OptParse
 import Text.Casing
@@ -26,14 +25,13 @@ templateCli = getSettings >>= fill
 
 fill :: Settings -> IO ()
 fill fs@Settings {..} = do
-  pPrint fs
   df <- DF.readNonHidden settingSourceDir (\p -> T.readFile $ fromAbsFile p)
-  pPrint df
   case DF.fromMap $ fillMap settingFind settingReplace $ DF.toMap df of
     Left err -> die $ "Failed to replace path: " <> show err
     Right pathsReplacedDF -> do
       let df' = fillDirforest settingFind settingReplace pathsReplacedDF
-      pPrint df'
+      DF.write settingBackupDir df (\p t -> T.writeFile (fromAbsFile p) t)
+      DF.write settingDestinationDir df' (\p t -> T.writeFile (fromAbsFile p) t)
 
 fillMap :: Text -> Text -> Map FilePath a -> Map FilePath a
 fillMap findText replaceText = M.mapKeys (T.unpack . fillText findText replaceText . T.pack)

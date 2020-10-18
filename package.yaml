@@ -12,6 +12,7 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
+  - bytestring
   - casing
   - containers
   - dirforest
@@ -44,11 +45,11 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - bytestring
+    - dirforest
     - hspec
     - optparse-applicative
     - path
     - path-io
     - template-filler
     - yaml
-    - bytestring
-    - dirforest

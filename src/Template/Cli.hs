@@ -29,29 +29,30 @@ templateCli = getSettings >>= fill
 
 fill :: Settings -> IO ()
 fill fs@Settings {..} =
-  ( case settingFromTo of
-      FromToFile source destination -> fillFile source destination
-      FromToDir source destination -> fillDir source destination
-  )
-    settingBackupDir
-    settingFind
-    settingReplace
-
-fillFile :: Path Abs File -> Path Abs File -> Path Abs Dir -> Text -> Text -> IO ()
-fillFile source destination backup findText replaceText = do
-  mbs <- forgivingAbsence $ SB.readFile $ fromAbsFile source
-  let mbs' = fillByteString findText replaceText <$> mbs
-  forM_ mbs' $ \bs' -> SB.writeFile (fromAbsFile destination) bs'
-
-fillDir :: Path Abs Dir -> Path Abs Dir -> Path Abs Dir -> Text -> Text -> IO ()
-fillDir source destination backup findText replaceText = do
-  df <- DF.read source (\p -> SB.readFile $ fromAbsFile p)
-  case DF.fromMap $ fillMap findText replaceText $ DF.toMap df of
-    Left err -> die $ "Failed to replace path: " <> show err
-    Right pathsReplacedDF -> do
-      let df' = fillDirforest findText replaceText pathsReplacedDF
-      DF.write backup df (\p t -> SB.writeFile (fromAbsFile p) t)
-      DF.write destination df' (\p t -> SB.writeFile (fromAbsFile p) t)
+  case settingFromTo of
+    FromToFile source destination -> fillFile source destination
+    FromToDir source destination -> fillDir source destination
+  where
+    writeSafe :: Path Abs File -> ByteString -> IO ()
+    writeSafe p bs = do
+      fileExists <- doesFileExist p
+      if fileExists && not settingOverwrite
+        then pure ()
+        else SB.writeFile (fromAbsFile p) bs
+    fillFile :: Path Abs File -> Path Abs File -> IO ()
+    fillFile source destination = do
+      mbs <- forgivingAbsence $ SB.readFile $ fromAbsFile source
+      let mbs' = fillByteString settingFind settingReplace <$> mbs
+      forM_ mbs' $ writeSafe destination
+    fillDir :: Path Abs Dir -> Path Abs Dir -> IO ()
+    fillDir source destination = do
+      df <- DF.read source (\p -> SB.readFile $ fromAbsFile p)
+      case DF.fromMap $ fillMap settingFind settingReplace $ DF.toMap df of
+        Left err -> die $ "Failed to replace path: " <> show err
+        Right pathsReplacedDF -> do
+          let df' = fillDirforest settingFind settingReplace pathsReplacedDF
+          DF.write settingBackupDir df (\p t -> SB.writeFile (fromAbsFile p) t)
+          DF.write destination df' writeSafe
 
 fillMap :: Text -> Text -> Map FilePath a -> Map FilePath a
 fillMap findText replaceText = M.mapKeys (T.unpack . fillText findText replaceText . T.pack)

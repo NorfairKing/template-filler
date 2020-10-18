@@ -36,7 +36,8 @@ data Settings
       { settingFromTo :: !FromTo,
         settingBackupDir :: !(Path Abs Dir),
         settingFind :: !Text,
-        settingReplace :: !Text
+        settingReplace :: !Text,
+        settingOverwrite :: Bool
       }
   deriving (Show, Eq, Generic)
 
@@ -67,6 +68,7 @@ combineToSettings Flags {..} = do
     (IsDir sd, NonExistent dfp) -> FromToDir sd <$> resolveDir' dfp
   let settingFind = flagFind
   let settingReplace = flagReplace
+  let settingOverwrite = flagOverwrite
   pure Settings {..}
 
 data FileOrDir = IsFile (Path Abs File) | IsDir (Path Abs Dir) | NonExistent FilePath
@@ -98,7 +100,8 @@ data Flags
         flagDestination :: !(Maybe FilePath),
         flagBackupDir :: !(Maybe FilePath),
         flagFind :: !Text,
-        flagReplace :: !Text
+        flagReplace :: !Text,
+        flagOverwrite :: !Bool
       }
   deriving (Show, Eq, Generic)
 
@@ -147,6 +150,12 @@ parseFlags = OptParse.info parser modifier
                 [ long "replace",
                   help "The string to replace by",
                   metavar "REPLACEMENT"
+                ]
+            )
+          <*> switch
+            ( mconcat
+                [ long "overwrite",
+                  help "The overwrite files when writing, default: false"
                 ]
             )
       )

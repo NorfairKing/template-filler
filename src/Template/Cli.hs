@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Template.Cli where
@@ -51,7 +52,9 @@ fill fs@Settings {..} =
         Left err -> die $ "Failed to replace path: " <> show err
         Right pathsReplacedDF -> do
           let df' = fillDirforest settingFind settingReplace pathsReplacedDF
-          DF.write settingBackupDir df (\p t -> SB.writeFile (fromAbsFile p) t)
+          DF.write (settingBackupDir </> [reldir|source|]) df (\p t -> SB.writeFile (fromAbsFile p) t)
+          destExists <- doesDirExist destination
+          when destExists $ copyDirRecur destination (settingBackupDir </> [reldir|destination|])
           DF.write destination df' writeSafe
 
 fillMap :: Text -> Text -> Map FilePath a -> Map FilePath a

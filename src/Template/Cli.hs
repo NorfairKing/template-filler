@@ -10,6 +10,7 @@ import qualified Data.ByteString as SB
 import Data.ByteString (ByteString)
 import qualified Data.DirForest as DF
 import Data.DirForest (DirForest (..))
+import Data.List
 import qualified Data.Map as M
 import Data.Map (Map)
 import Data.Monoid
@@ -21,6 +22,8 @@ import Data.Time
 import Path
 import Path.IO
 import System.Exit
+import System.IO
+import System.IO.Error
 import Template.Cli.OptParse
 import Text.Casing
 import Text.Show.Pretty
@@ -39,7 +42,13 @@ fill fs@Settings {..} =
       fileExists <- doesFileExist p
       if fileExists && not settingOverwrite
         then pure ()
-        else SB.writeFile (fromAbsFile p) bs
+        else
+          SB.writeFile (fromAbsFile p) bs
+            `catchIOError` ( \e ->
+                               if isPermissionError e
+                                 then pure ()
+                                 else ioError e
+                           )
     fillFile :: Path Abs File -> Path Abs File -> IO ()
     fillFile source destination = do
       mbs <- forgivingAbsence $ SB.readFile $ fromAbsFile source
@@ -47,7 +56,7 @@ fill fs@Settings {..} =
       forM_ mbs' $ writeSafe destination
     fillDir :: Path Abs Dir -> Path Abs Dir -> IO ()
     fillDir source destination = do
-      df <- DF.read source (\p -> SB.readFile $ fromAbsFile p)
+      df <- DF.readFiltered (const True) (\d -> not $ ".git" `isInfixOf` fromAbsDir d) source (\p -> SB.readFile $ fromAbsFile p)
       case DF.fromMap $ fillMap settingFind settingReplace $ DF.toMap df of
         Left err -> die $ "Failed to replace path: " <> show err
         Right pathsReplacedDF -> do
@@ -74,7 +83,7 @@ fillText findText replaceText = appEndo $ mconcat $ map (Endo . replaceUsingCasi
     casings :: [Identifier String -> String]
     casings = [toCamel, toPascal, toSnake, toQuietSnake, toScreamingSnake, toKebab]
     viaCasing :: (Identifier String -> String) -> Text -> Text
-    viaCasing casing = T.pack . casing . fromAny . T.unpack
+    viaCasing casing = T.pack . casing . fromHumps . T.unpack
     replaceUsingCasing :: (Identifier String -> String) -> Text -> Text
     replaceUsingCasing casing =
       let needle = viaCasing casing findText

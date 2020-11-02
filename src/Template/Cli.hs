@@ -8,6 +8,7 @@ module Template.Cli where
 import Control.Monad
 import qualified Data.ByteString as SB
 import Data.ByteString (ByteString)
+import Data.Char as Char
 import qualified Data.DirForest as DF
 import Data.DirForest (DirForest (..))
 import Data.List
@@ -17,22 +18,18 @@ import Data.Monoid
 import qualified Data.Text as T
 import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
-import qualified Data.Text.IO as T
-import Data.Time
 import Path
 import Path.IO
 import System.Exit
-import System.IO
 import System.IO.Error
 import Template.Cli.OptParse
 import Text.Casing
-import Text.Show.Pretty
 
 templateCli :: IO ()
 templateCli = getSettings >>= fill
 
 fill :: Settings -> IO ()
-fill fs@Settings {..} =
+fill Settings {..} =
   case settingFromTo of
     FromToFile source destination -> fillFile source destination
     FromToDir source destination -> fillDir source destination
@@ -78,14 +75,54 @@ fillByteString findText replaceText bs = case TE.decodeUtf8' bs of
   Right t -> TE.encodeUtf8 $ fillText findText replaceText t
 
 fillText :: Text -> Text -> Text -> Text
-fillText findText replaceText = appEndo $ mconcat $ map (Endo . replaceUsingCasing) casings
-  where
-    casings :: [Identifier String -> String]
-    casings = [toCamel, toPascal, toSnake, toQuietSnake, toScreamingSnake, toKebab]
-    viaCasing :: (Identifier String -> String) -> Text -> Text
-    viaCasing casing = T.pack . casing . fromHumps . T.unpack
-    replaceUsingCasing :: (Identifier String -> String) -> Text -> Text
-    replaceUsingCasing casing =
-      let needle = viaCasing casing findText
-          replacement = viaCasing casing replaceText
-       in T.replace needle replacement
+fillText findText replaceText = appEndo $ mconcat $ map (Endo . fillTextViaCasing findText replaceText) casings
+
+fillTextViaCasing :: Text -> Text -> (Identifier String -> String) -> Text -> Text
+fillTextViaCasing findText replaceText casing =
+  let needle = viaCasing casing findText
+      replacement = viaCasing casing replaceText
+   in T.replace needle replacement
+
+normaliseIdentifier :: Identifier String -> Identifier String
+normaliseIdentifier = Identifier . map (map Char.toLower) . unIdentifier
+
+viaCasing :: (Identifier String -> String) -> Text -> Text
+viaCasing casing = T.pack . casing . normaliseIdentifier . fromHumps . T.unpack
+
+-- The order matters
+casings :: [Identifier String -> String]
+casings =
+  [ toCamel,
+    toDottedCapitalised,
+    toDottedLower,
+    toKebab,
+    toPascal,
+    toQuietSnake,
+    toScreamingSnake,
+    toSlashedCapitalised,
+    toSlashedLower,
+    toWordsCapitalised,
+    toWordsLower
+  ]
+
+toWordsLower :: Identifier String -> String
+toWordsLower = toWords
+
+toWordsCapitalised :: Identifier String -> String
+toWordsCapitalised = unwords . map wordCase . unIdentifier
+
+toDottedLower :: Identifier String -> String
+toDottedLower = intercalate "." . unIdentifier
+
+toDottedCapitalised :: Identifier String -> String
+toDottedCapitalised = intercalate "." . map wordCase . unIdentifier
+
+toSlashedLower :: Identifier String -> String
+toSlashedLower = intercalate "/" . unIdentifier
+
+toSlashedCapitalised :: Identifier String -> String
+toSlashedCapitalised = intercalate "/" . map wordCase . unIdentifier
+
+wordCase :: String -> String
+wordCase "" = ""
+wordCase (x : xs) = toUpper x : map toLower xs

@@ -47,6 +47,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - bytestring
+    - casing
     - dirforest
     - hspec
     - optparse-applicative
